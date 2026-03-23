@@ -1,411 +1,323 @@
-# os-project
+# Decentralized HiveMind AI Agents Protocol
 
-A semi-decentralized agentic AI compute cluster. Anyone can connect a machine as a node and earn credits for contributing compute power (GPU/CPU inference). A central lightweight orchestrator handles job routing, credit accounting, and node registry, while all AI inference runs on volunteer nodes.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.82%2B-orange.svg)](https://www.rust-lang.org)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
-> For setup and usage instructions, see [INSTRUCTIONS.md](INSTRUCTIONS.md).
+A semi-decentralized protocol for running collaborative multi-agent AI workloads across a permissionless network of volunteer compute nodes. Anyone can contribute a machine — GPU or CPU — and earn credits for inference work. A lightweight central orchestrator handles job routing, task DAG planning, and credit accounting; all AI inference runs on the volunteer nodes.
 
 ---
 
 ## Table of Contents
 
-- [os-project](#os-project)
-  - [Table of Contents](#table-of-contents)
-  - [Architecture Overview](#architecture-overview)
-  - [Project Structure](#project-structure)
-  - [License](#license)
+- [How It Works](#how-it-works)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+  - [Docker Compose (Recommended)](#docker-compose-recommended)
+  - [Manual Local Setup](#manual-local-setup)
+- [Running a Node](#running-a-node)
+- [Submitting a Job](#submitting-a-job)
+- [Configuration Reference](#configuration-reference)
+- [API Overview](#api-overview)
+- [Credit System](#credit-system)
+- [Security Model](#security-model)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## Architecture Overview
+## How It Works
+
+1. **Submit a job** — A user or autonomous agent sends a prompt + model hint + budget to the orchestrator REST API.
+2. **DAG planning** — The orchestrator decomposes the job into sub-tasks using a Directed Acyclic Graph with roles like `Planner`, `Coder`, `Critic`, `Summarizer`, etc.
+3. **Privacy filtering** — For paid/premium jobs, PII (emails, API keys, card numbers, IPs) is tokenized before any data leaves the orchestrator.
+4. **Dispatch** — Sub-tasks are enqueued on a Redis Stream. Volunteer nodes subscribe and pull work matching their hardware tier.
+5. **Inference** — Nodes run local inference via `llama-server` or direct `llama.cpp` bindings, compute a proof hash, and POST results back.
+6. **Validation** — The orchestrator runs a 5-step pipeline: proof hash check → prompt-injection scan → schema validation → content sanitization → deduplication.
+7. **Credits** — Valid results earn signed credit receipts. Nodes accumulate credits locally and can redeem them on-chain via a Solana SPL token program.
+
+---
+
+## Architecture
 
 ```
- ┌──────────────────────────────────────────────────────┐
- │                     Orchestrator                      │
- │  ┌──────────┐  ┌───────────┐  ┌────────────────────┐ │
- │  │ HTTP API │  │  Task DAG │  │  Task Manager Loop  │ │
- │  │  (Axum)  │  │  + Privacy│  │  (Redis Streams)   │ │
- │  └──────────┘  └───────────┘  └────────────────────┘ │
- │         │              │                │             │
- │     PostgreSQL       Validator        Redis           │
- └─────────────────────────────────────────────────────-┘
-           │                                │
-     Job submissions              Sub-task dispatch
-           │                                │
- ┌─────────▼────────┐            ┌──────────▼──────────┐
- │   User / Agent   │            │    Volunteer Nodes   │
- │  (API consumers) │            │  (node-client CLI)   │
- └──────────────────┘            └─────────────────────┘
+ ┌─────────────────────────────────────────────────────────┐
+ │                       Orchestrator                       │
+ │                                                          │
+ │   ┌──────────┐   ┌────────────┐   ┌──────────────────┐  │
+ │   │ HTTP API │   │  Task DAG  │   │  Task Manager    │  │
+ │   │  (Axum)  │   │ + Privacy  │   │  (Redis Streams) │  │
+ │   └────┬─────┘   └─────┬──────┘   └────────┬─────────┘  │
+ │        │               │                   │             │
+ │   PostgreSQL        Validator            Redis           │
+ └────────────────────────────────────────────────────────-┘
+          │                                   │
+    Job submissions                 Sub-task dispatch
+          │                                   │
+ ┌────────▼──────────┐           ┌────────────▼────────────┐
+ │   User / Agent    │           │     Volunteer Nodes      │
+ │  (API consumers)  │           │   (node-client CLI)      │
+ └───────────────────┘           └─────────────────────────┘
 ```
 
-**How it works:**
+### Key Components
 
-1. A user submits a job (prompt + model hint + budget) via the API.
-2. The orchestrator breaks the job into sub-tasks using a DAG (Directed Acyclic Graph), with roles like `Planner`, `Coder`, `Critic`, etc.
-3. For Paid/Premium jobs, PII (emails, API keys, card numbers, IPs) is tokenized before dispatch.
-4. Sub-tasks are queued on a Redis Stream and consumed by volunteer nodes.
-5. Nodes run local inference (via llama-server or direct llama.cpp bindings), compute a proof hash, and POST results back.
-6. The orchestrator validates results (proof hash, prompt-injection scan, schema check, content sanitization) and issues signed credit receipts.
-7. Nodes accumulate credits locally and can redeem them on-chain via Solana SPL token.
+| Component | Technology | Role |
+|---|---|---|
+| Orchestrator | Axum, SQLx, Redis | HTTP API, DAG planner, task dispatcher, credit ledger |
+| node-client | Tokio, Ratatui | Volunteer node worker with terminal UI |
+| common | Pure Rust | Shared types, Ed25519 identity, credit formula, mTLS |
+| Database | PostgreSQL 15 | Job/task/node registry and credit receipts |
+| Queue | Redis Streams | Sub-task dispatch and result ingestion |
+| On-chain | Solana SPL | Credit redemption as fungible tokens |
 
 ---
 
 ## Project Structure
 
 ```
-os-project/
-├── Cargo.toml              # Workspace manifest
-├── docker-compose.yml      # Postgres + Redis + Orchestrator
-├── common/                 # Shared types, crypto, credit logic (no I/O)
+Decentralized-HiveMind-AI-Agents-Protocol/
+├── Cargo.toml                  # Workspace manifest
+├── docker-compose.yml          # Postgres + Redis + Orchestrator
+├── common/                     # Shared library (no I/O side effects)
 │   └── src/
-│       ├── types.rs        # NodeTier, AgentRole, JobRequest, TaskDag, etc.
-│       ├── identity.rs     # Ed25519 key management
-│       ├── credits.rs      # Credit formula, payout split, reputation score
-│       └── tls.rs          # mTLS certificate issuance
-├── orchestrator/           # Central server (Axum + Postgres + Redis)
+│       ├── types.rs            # NodeTier, AgentRole, JobRequest, TaskDag
+│       ├── identity.rs         # Ed25519 key management
+│       ├── credits.rs          # Credit formula, payouts, reputation score
+│       └── tls.rs              # mTLS certificate issuance
+├── orchestrator/               # Central server
 │   ├── migrations/
-│   │   └── 001_initial.sql # DB schema (auto-applied on startup)
+│   │   └── 001_initial.sql     # DB schema (auto-applied on startup)
 │   └── src/
-│       ├── config.rs       # Env-var config loading
-│       ├── main.rs         # Server entrypoint
-│       ├── state.rs        # AppState (DB pool, Redis, signing keys)
-│       ├── dag.rs          # Planner JSON → validated TaskDag
-│       ├── privacy.rs      # PII tokenization / detokenization
-│       ├── task_manager.rs # Background sub-task dispatcher
-│       ├── validator.rs    # 5-step result validation pipeline
-│       ├── error.rs        # Error types → HTTP responses
+│       ├── main.rs             # Server entrypoint
+│       ├── config.rs           # Env-var config loading
+│       ├── state.rs            # AppState (DB pool, Redis, signing keys)
+│       ├── dag.rs              # Planner JSON → validated TaskDag
+│       ├── privacy.rs          # PII tokenization / detokenization
+│       ├── task_manager.rs     # Background sub-task dispatcher loop
+│       ├── validator.rs        # 5-step result validation pipeline
+│       ├── error.rs            # Error types → HTTP responses
 │       ├── middleware/
-│       │   ├── auth.rs     # Ed25519 request signing middleware
+│       │   ├── auth.rs         # Ed25519 request signing middleware
 │       │   └── rate_limit.rs
 │       └── routes/
-│           ├── nodes.rs    # /nodes/*
-│           ├── jobs.rs     # /jobs/*
-│           ├── tasks.rs    # /tasks/*
-│           └── admin.rs    # /admin/*
-└── node-client/            # Volunteer node CLI binary
-    └── src/
-        ├── config.rs       # Env-var config loading
-        ├── main.rs         # CLI entrypoint (clap)
-        ├── runner.rs       # Redis consumer + inference worker
-        └── wallet.rs       # Ed25519 key + receipt persistence
+│           ├── nodes.rs        # /nodes/*
+│           ├── jobs.rs         # /jobs/*
+│           ├── tasks.rs        # /tasks/*
+│           └── admin.rs        # /admin/*
+├── node-client/                # Volunteer node CLI binary
+│   └── src/
+│       ├── main.rs             # CLI entrypoint (clap + interactive setup)
+│       ├── config.rs           # Env-var config
+│       ├── runner.rs           # Redis consumer + inference worker
+│       ├── wallet.rs           # Ed25519 key + credit receipt persistence
+│       └── ui.rs               # Ratatui terminal UI
+└── keygen/                     # Key generation utility
+    └── src/main.rs
 ```
 
 ---
 
-## License
+## Quick Start
 
-Apache-2.0 — see [LICENSE](LICENSE).
+### Prerequisites
 
-Create a `.env` file in the project root (used by Docker Compose) or export these variables before running locally:
-
-| Variable | Required | Description |
+| Tool | Version | Notes |
 |---|---|---|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string, e.g. `postgres://postgres:postgres@localhost:5432/orchestrator` |
-| `REDIS_URL` | ✅ | Redis URL, e.g. `redis://localhost:6379` |
-| `ORCHESTRATOR_SIGNING_KEY` | ✅ | Hex-encoded 64-byte Ed25519 keypair (signing key) |
-| `ADMIN_SIGNING_KEY` | ✅ | Hex-encoded 64-byte Ed25519 admin keypair |
-| `ORCHESTRATOR_CA_KEY_PATH` | ✅ | Path to cluster CA private key PEM (for mTLS cert issuance) |
-| `SOLANA_RPC_URL` | ✅ | Solana RPC endpoint, e.g. `https://api.devnet.solana.com` |
-| `CLUSTER_TOKEN_PROGRAM_ID` | ❌ | Anchor program ID (set after first on-chain deploy) |
-| `PORT` | ❌ | HTTP listen port (default: `8080`) |
-| `APP_ENV` | ❌ | `development` / `staging` / `production` (default: `development`) |
+| [Rust](https://rustup.rs) | 1.82+ | Required for local builds |
+| [Docker + Compose](https://docs.docker.com/get-docker/) | v2+ | Required for Docker path |
+| PostgreSQL | 15+ | Needed for manual setup |
+| Redis | 7+ | Needed for manual setup |
+| llama-server | any | Required on volunteer nodes |
 
-**Generating signing keys:**
+### Docker Compose (Recommended)
+
+The fastest way to run the orchestrator. No Rust installation needed.
 
 ```bash
-# Generate a random Ed25519 keypair and print as hex (32-byte seed → 64-byte expanded)
-# You can use the node-client wallet to generate and view your key:
-cargo run -p node-client -- wallet show
-```
+# 1. Clone
+git clone https://github.com/InterNeuronLabs/Decentralized-HiveMind-AI-Agents-Protocol
+cd Decentralized-HiveMind-AI-Agents-Protocol
 
-### Node Client Environment Variables
+# 2. Generate signing keys
+cargo run -p keygen
 
-Create a `.env` file or export before running:
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ORCHESTRATOR_URL` | ✅ | — | Base URL of the orchestrator, e.g. `http://localhost:8080` |
-| `CA_CERT_PATH` | ✅ | — | Path to cluster CA certificate PEM |
-| `NODE_CERT_PATH` | ✅ | — | Path to this node's TLS certificate PEM |
-| `NODE_KEY_PATH` | ✅ | — | Path to this node's TLS private key PEM |
-| `REDIS_URL` | ✅ | — | Redis URL, e.g. `redis://localhost:6379` (must be same Redis as orchestrator) |
-| `WALLET_PATH` | ❌ | `~/.node-client/wallet.key` | Ed25519 key file path |
-| `MODEL_ID` | ❌ | `llama3-8b` | Model slug to advertise during registration |
-| `MODEL_PATH` | ❌ | `""` | GGUF model file path (only for `llama-direct` feature) |
-| `LLAMA_SERVER_URL` | ❌ | `http://127.0.0.1:8080` | Local llama-server address |
-| `NODE_TIER` | ❌ | `edge` | Hardware tier: `nano` / `edge` / `pro` / `cluster` |
-| `SOLANA_WALLET` | ❌ | — | Solana public key for on-chain credit redemption |
-
----
-
-## Running with Docker Compose
-
-The easiest way to get the orchestrator running:
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/SoorajNair-001/os-project
-cd os-project
-
-# 2. Create a .env file with required secrets (see configuration above)
+# 3. Create your .env (see Configuration Reference below)
 cp .env.example .env
-# Edit .env and fill in ORCHESTRATOR_SIGNING_KEY, ADMIN_SIGNING_KEY,
-# ORCHESTRATOR_CA_KEY_PATH, SOLANA_RPC_URL
+# Fill in ORCHESTRATOR_SIGNING_KEY, ADMIN_SIGNING_KEY, ORCHESTRATOR_CA_KEY_PATH, SOLANA_RPC_URL
 
-# 3. Start all services (Postgres, Redis, Orchestrator)
-docker-compose up
+# 4. Start all services
+docker compose up
 
-# 4. To rebuild after code changes:
-docker-compose up --build
-
-# 5. Run in background:
-docker-compose up -d
+# Rebuild after code changes:
+docker compose up --build
 ```
 
 Services started:
 
 | Service | Port | Notes |
 |---|---|---|
-| `postgres` | `5432` | Database: `orchestrator`, user/pass: `postgres`/`postgres` |
+| `postgres` | `5432` | DB: `orchestrator`, credentials: `postgres`/`postgres` |
 | `redis` | `6379` | Persistent volume |
-| `orchestrator` | `8080` | Starts after DB and Redis are healthy. DB migrations run automatically. |
+| `orchestrator` | `8080` | Starts after DB + Redis are healthy; migrations run automatically |
 
----
-
-## Running Locally (Manual Setup)
-
-### 1. Start Dependencies
+### Manual Local Setup
 
 ```bash
-# Start PostgreSQL (example with Homebrew on macOS)
-brew services start postgresql@15
-
-# Create the database
+# 1. Start PostgreSQL and create the database
+brew services start postgresql@15   # macOS example
 createdb orchestrator
 
-# Start Redis
+# 2. Start Redis
 brew services start redis
-```
 
-### 2. Run the Orchestrator
-
-```bash
-# Set environment variables
+# 3. Export required environment variables
 export DATABASE_URL="postgres://postgres:postgres@localhost:5432/orchestrator"
 export REDIS_URL="redis://localhost:6379"
-export ORCHESTRATOR_SIGNING_KEY="<64-byte hex signing key>"
-export ADMIN_SIGNING_KEY="<64-byte hex admin signing key>"
+export ORCHESTRATOR_SIGNING_KEY="<64-byte hex key>"
+export ADMIN_SIGNING_KEY="<64-byte hex key>"
 export ORCHESTRATOR_CA_KEY_PATH="/path/to/ca.key.pem"
 export SOLANA_RPC_URL="https://api.devnet.solana.com"
 
-# Run (migrations are applied automatically on startup)
+# 4. Run (migrations apply automatically)
 cargo run -p orchestrator
-
-# Or in release mode:
-cargo run -p orchestrator --release
 ```
 
-The orchestrator will:
-- Apply any pending SQL migrations
-- Start the background task dispatcher loop (500ms interval)
-- Listen for HTTP connections on `0.0.0.0:8080`
+---
 
-### 3. Run a Node Client
+## Running a Node
+
+Run the interactive setup wizard for first-time configuration:
 
 ```bash
-# Set environment variables for the node
+cargo run -p node-client -- setup
+```
+
+Or configure via environment variables and start the worker directly:
+
+```bash
 export ORCHESTRATOR_URL="http://localhost:8080"
 export CA_CERT_PATH="/path/to/ca.crt.pem"
 export NODE_CERT_PATH="/path/to/node.crt.pem"
 export NODE_KEY_PATH="/path/to/node.key.pem"
 export REDIS_URL="redis://localhost:6379"
-export NODE_TIER="edge"
+export NODE_TIER="edge"          # nano | edge | pro | cluster
 export MODEL_ID="llama3-8b"
-export LLAMA_SERVER_URL="http://127.0.0.1:8080"  # Your local llama-server
+export LLAMA_SERVER_URL="http://127.0.0.1:8080"
 
-# Step 1: Register this node with the orchestrator
-cargo run -p node-client -- register
-
-# Step 2: Start processing jobs
-cargo run -p node-client -- start
+cargo run -p node-client -- run
 ```
 
-> **Note:** The node client connects to the same Redis instance as the orchestrator to consume sub-tasks from the `subtasks` stream.
-
----
-
-## Building
+View your wallet and earned credits:
 
 ```bash
-# Build all crates
-cargo build --workspace
-
-# Release build (LTO enabled, smaller/faster binaries)
-cargo build --workspace --release
-
-# Build a specific crate
-cargo build -p orchestrator
-cargo build -p node-client
-
-# Build node client with direct llama.cpp inference (no external llama-server required)
-cargo build -p node-client --features llama-direct
+cargo run -p node-client -- wallet show
 ```
-
-Compiled binaries are placed in `target/debug/` or `target/release/`.
 
 ---
 
-## API Reference
+## Submitting a Job
 
-### Authentication
+```bash
+curl -X POST http://localhost:8080/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Node-Id: <your-node-id>" \
+  -H "X-Signature: <ed25519-signature>" \
+  -d '{
+    "prompt": "Write a Rust function that parses a JWT without external crates",
+    "model_hint": "llama3-8b",
+    "budget": 100,
+    "tier": "edge"
+  }'
+```
 
-Every API call (except `GET /health`) requires four HTTP headers for Ed25519 request signing:
+Poll for results:
 
-| Header | Description |
-|---|---|
-| `X-Pubkey` | Hex-encoded 32-byte Ed25519 verifying key |
-| `X-Timestamp` | Unix time in **milliseconds** (must be within ±30s of server time) |
-| `X-Nonce` | Hex-encoded 32-byte random nonce (single-use, 60s TTL) |
-| `X-Signature` | Hex Ed25519 signature over `sha256(request_body \|\| timestamp_ms \|\| nonce_hex)` |
-
-Duplicate nonces return `401 Unauthorized`. Stale timestamps return `401 Unauthorized`.
-
-Admin routes additionally require that `X-Pubkey` matches the orchestrator's `ADMIN_SIGNING_KEY` public key.
-
-### Endpoints
-
-#### Public
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Liveness probe — checks DB connectivity. Returns `200 OK` |
-
-#### Nodes
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/nodes/register` | Register or update a node (upsert by pubkey). Body: `NodeCapabilities` JSON |
-| `POST` | `/nodes/heartbeat` | Keep-alive — updates `last_seen_at` |
-| `GET` | `/nodes` | List active nodes (seen in last 5 min, not banned), sorted by reputation |
-
-Rate limit: 5 registrations per minute per IP.
-
-#### Jobs
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/jobs/submit` | Submit a new inference job. Body: `JobRequest` JSON |
-| `GET` | `/jobs/:id` | Poll job status and total cost |
-
-Rate limit: 10 job submissions per minute per wallet pubkey.
-
-#### Tasks (Node → Orchestrator)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/tasks/:id/result` | Submit completed task result (triggers 5-step validation + credit receipt issuance) |
-
-#### Admin
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/admin/nodes/ban` | Ban a node by pubkey (with reason, optional expiry timestamp) |
-| `POST` | `/admin/nodes/unban` | Unban a node by pubkey |
-| `GET` | `/admin/nodes/flagged` | List nodes with reputation score < 0.3 or currently banned |
+```bash
+curl http://localhost:8080/jobs/<job-id>
+```
 
 ---
 
-## Node Client CLI
+## Configuration Reference
 
-```
-node-client <COMMAND>
+### Orchestrator Environment Variables
 
-Commands:
-  register          Register this machine as a node with the orchestrator
-  start             Begin consuming and processing sub-tasks from the queue
-  wallet show       Print this node's Ed25519 public key
-  wallet receipts   List all stored credit receipts and total earned credits
-```
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `REDIS_URL` | ✅ | Redis URL |
+| `ORCHESTRATOR_SIGNING_KEY` | ✅ | Hex-encoded 64-byte Ed25519 keypair |
+| `ADMIN_SIGNING_KEY` | ✅ | Hex-encoded 64-byte Ed25519 admin keypair |
+| `ORCHESTRATOR_CA_KEY_PATH` | ✅ | Path to cluster CA private key PEM |
+| `SOLANA_RPC_URL` | ✅ | Solana RPC endpoint |
+| `CLUSTER_TOKEN_PROGRAM_ID` | ❌ | Anchor program ID (set after on-chain deploy) |
+| `PORT` | ❌ | HTTP listen port (default: `8080`) |
+| `APP_ENV` | ❌ | `development` / `staging` / `production` (default: `development`) |
 
-The wallet key is stored at `~/.node-client/wallet.key` (permissions `0600`). Credit receipts are stored as JSON files in `~/.node-client/receipts/`. The orchestrator's signature on each receipt is verified before writing.
+### Node Client Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ORCHESTRATOR_URL` | ✅ | — | Orchestrator base URL |
+| `CA_CERT_PATH` | ✅ | — | Cluster CA certificate PEM path |
+| `NODE_CERT_PATH` | ✅ | — | Node TLS certificate PEM path |
+| `NODE_KEY_PATH` | ✅ | — | Node TLS private key PEM path |
+| `REDIS_URL` | ✅ | — | Must be the same Redis instance as the orchestrator |
+| `WALLET_PATH` | ❌ | `~/.node-client/wallet.key` | Ed25519 key file path |
+| `MODEL_ID` | ❌ | `llama3-8b` | Model slug advertised on registration |
+| `MODEL_PATH` | ❌ | `""` | GGUF model path (only for `llama-direct` feature) |
+| `LLAMA_SERVER_URL` | ❌ | `http://127.0.0.1:8080` | Local llama-server address |
+| `NODE_TIER` | ❌ | `edge` | Hardware tier: `nano` / `edge` / `pro` / `cluster` |
+| `SOLANA_WALLET` | ❌ | — | Solana public key for credit redemption |
+
+---
+
+## API Overview
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| `POST` | `/jobs` | Signed | Submit a new AI job |
+| `GET` | `/jobs/:id` | — | Poll job status and results |
+| `GET` | `/nodes` | — | List registered nodes |
+| `POST` | `/nodes/register` | Signed | Register a new volunteer node |
+| `POST` | `/tasks/:id/result` | Signed | Submit sub-task result (nodes only) |
+| `GET` | `/admin/stats` | Admin | Cluster-wide statistics |
+
+Full API reference: [INSTRUCTIONS.md](INSTRUCTIONS.md)
 
 ---
 
 ## Credit System
 
-Credits are earned per completed sub-task using the following formula:
+Credits are earned per validated sub-task result. The payout formula accounts for:
 
-$$C_{node} = \frac{(T_{in} + T_{out}) \times W_{role} \times M_{tier}}{\sum_i (T_i \times W_i \times M_i)} \times 0.70 \times P_{total}$$
+- **Node tier** — `nano` < `edge` < `pro` < `cluster`
+- **Task complexity** — token count, model size, latency
+- **Reputation score** — weighted from historical acceptance rate
 
-**Payout split per job:**
-
-| Recipient | Share |
-|---|---|
-| Executor nodes | 70% |
-| Orchestrator | 20% |
-| Validation pool | 10% |
-
-**Hardware tier multipliers:**
-
-| Tier | Multiplier |
-|---|---|
-| Nano | 0.1× |
-| Edge | 1.0× |
-| Pro | 3.0× |
-| Cluster | 8.0× |
-
-**Agent role weights:**
-
-| Role | Weight |
-|---|---|
-| Planner, Aggregator | 2.0× |
-| Coder, Researcher | 1.5× |
-| Critic | 1.2× |
-| ApiRelay | 1.0× |
-| Summarizer | 0.8× |
-
-**Anti-Sybil:** Nodes with fewer than 100 completed jobs earn 50% of their calculated rate.
-
-**Redemption:** Each receipt is signed by the orchestrator's Ed25519 key and includes a unique nonce (replay-prevention). Receipts expire after 1 hour and can be redeemed on-chain via the Solana SPL token program (requires `SOLANA_WALLET` to be set on the node client).
+Earned credits are stored as signed receipts in the node's local wallet and can be redeemed on Solana devnet (mainnet support planned). The on-chain SPL token program ID is configurable via `CLUSTER_TOKEN_PROGRAM_ID`.
 
 ---
 
-## Development
+## Security Model
 
-### Running Tests
+- **Mutual TLS (mTLS)** — Every node receives a certificate signed by the cluster CA. All node↔orchestrator traffic is authenticated at the transport layer.
+- **Ed25519 request signing** — All API requests include a cryptographic signature over the request body + timestamp, preventing replay attacks.
+- **PII tokenization** — Before dispatching tasks, the orchestrator scans for and replaces sensitive data (emails, keys, IPs, card numbers) with opaque tokens reversed only on result ingestion.
+- **Proof hashing** — Nodes include a hash over `(task_id + prompt_hash + output)` so results can be verified for authenticity.
+- **Prompt injection detection** — The validator scans node results for common injection patterns before accepting them.
+- **Rate limiting** — Per-IP rate limiting on all public routes via tower middleware.
 
-```bash
-cargo test --workspace
-```
+---
 
-### Linting & Formatting
+## Contributing
 
-```bash
-cargo fmt
-cargo clippy -- -D warnings
-```
-
-### Database Migrations
-
-Migrations in `orchestrator/migrations/` are applied automatically when the orchestrator starts via `sqlx::migrate!`. To add a new migration, create a numbered SQL file (e.g. `002_your_change.sql`).
-
-### Dependency Auditing
-
-```bash
-# cargo-deny checks licenses, security advisories, and duplicate deps
-cargo deny check
-```
-
-### Logging
-
-The orchestrator and node client use structured `tracing` logs. Control verbosity via the `RUST_LOG` environment variable:
-
-```bash
-RUST_LOG=info cargo run -p orchestrator
-RUST_LOG=debug cargo run -p node-client -- start
-```
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. By contributing, you agree to the [Contributor License Agreement](CLA.md).
 
 ---
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+[MIT](LICENSE) — Copyright (c) 2026 InterNeuronLabs
