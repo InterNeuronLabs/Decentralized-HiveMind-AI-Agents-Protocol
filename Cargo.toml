@@ -10,7 +10,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 authors = ["Sooraj Nair"]
-license = "Apache-2.0"
+license = "MIT"
 repository = "https://github.com/SoorajNair-001/os-project"
 
 [workspace.dependencies]
