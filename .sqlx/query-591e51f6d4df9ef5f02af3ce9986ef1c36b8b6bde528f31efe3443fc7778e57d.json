@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, tier, reputation_score, jobs_completed, last_seen_at\n        FROM nodes\n        WHERE is_banned = FALSE\n          AND last_seen_at > NOW() - INTERVAL '5 minutes'\n        ORDER BY reputation_score DESC\n        LIMIT 100\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "tier",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "reputation_score",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "jobs_completed",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "591e51f6d4df9ef5f02af3ce9986ef1c36b8b6bde528f31efe3443fc7778e57d"
+}

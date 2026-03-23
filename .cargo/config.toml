@@ -1,0 +1,5 @@
+[env]
+# Use the pre-generated .sqlx query cache so cargo check/build works
+# without a live DATABASE_URL. Regenerate with:
+#   cargo sqlx prepare --workspace
+SQLX_OFFLINE = "true"

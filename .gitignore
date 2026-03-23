@@ -1,0 +1,27 @@
+# Rust build outputs
+target/
+
+# Environment and secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+
+# Private infra folder — owner-only, not for public repo
+private/
+
+# Editor / OS artefacts
+.DS_Store
+.idea/
+.vscode/settings.json
+*.swp
+
+# Compiled Solana programs (retain source)
+solana/target/
+
+# llama model weights (large binary files)
+*.gguf
+*.bin
+
+# Docker volumes
+postgres-data/
+redis-data/

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE nodes\n        SET is_banned = TRUE, ban_reason = $2, ban_expires_at = $3\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "571e075f17ed1724057e596ecf2e13ecd7c2e698b1eec18c7db1e0437fc6d040"
+}

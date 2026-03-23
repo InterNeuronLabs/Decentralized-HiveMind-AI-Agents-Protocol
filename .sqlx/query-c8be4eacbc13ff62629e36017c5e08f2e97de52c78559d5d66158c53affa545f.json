@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE sub_tasks\n        SET status          = 'complete',\n            result          = $2,\n            assigned_node_id = $3,\n            tokens_in       = $4,\n            tokens_out      = $5,\n            updated_at      = NOW(),\n            completed_at    = NOW()\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8be4eacbc13ff62629e36017c5e08f2e97de52c78559d5d66158c53affa545f"
+}

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT role, tokens_in, tokens_out\n        FROM sub_tasks\n        WHERE job_id = $1 AND status = 'complete'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "tokens_in",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "tokens_out",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "4c9d6e36b0c8299f8f4e9366805ec1a0881f936aea9cd358b404d6e0b4a0dbd3"
+}

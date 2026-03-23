@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, pubkey_hex, tier, reputation_score, is_banned, ban_reason\n        FROM nodes\n        WHERE reputation_score < 0.3 OR is_banned = TRUE\n        ORDER BY reputation_score ASC\n        LIMIT 200\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "pubkey_hex",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "tier",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "reputation_score",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_banned",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "ban_reason",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6d1aefa2462aea6d3397c7e142f4d740b99afb7ae510b5f5d42a87df3a501aa0"
+}

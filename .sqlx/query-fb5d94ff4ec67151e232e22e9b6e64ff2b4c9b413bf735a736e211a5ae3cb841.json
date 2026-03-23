@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH eligible AS (\n            SELECT st.id\n            FROM sub_tasks st\n            WHERE st.status = 'pending'\n              AND NOT EXISTS (\n                  SELECT 1 FROM sub_tasks dep\n                  WHERE dep.job_id = st.job_id\n                    AND dep.position < st.position\n                    AND dep.status != 'complete'\n              )\n            ORDER BY st.created_at\n            LIMIT 50\n            FOR UPDATE SKIP LOCKED\n        )\n        UPDATE sub_tasks\n        SET status = 'dispatched', updated_at = NOW()\n        FROM eligible\n        WHERE sub_tasks.id = eligible.id\n        RETURNING sub_tasks.id, sub_tasks.job_id, sub_tasks.role,\n                  sub_tasks.prompt_shard, sub_tasks.min_tier, sub_tasks.agent_index\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "prompt_shard",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "min_tier",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "agent_index",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fb5d94ff4ec67151e232e22e9b6e64ff2b4c9b413bf735a736e211a5ae3cb841"
+}

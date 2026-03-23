@@ -1,0 +1,13 @@
+# All files — owned by Sooraj Nair
+* @soorajnair
+
+# Private infra (should never be committed — belt-and-suspenders)
+private/ @soorajnair
+
+# Solana on-chain program changes require owner review
+solana/ @soorajnair
+
+# Security-sensitive code
+orchestrator/src/middleware/ @soorajnair
+common/src/identity.rs @soorajnair
+common/src/tls.rs @soorajnair

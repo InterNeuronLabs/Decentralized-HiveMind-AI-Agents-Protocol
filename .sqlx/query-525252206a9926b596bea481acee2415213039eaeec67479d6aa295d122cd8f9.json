@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE sub_tasks\n            SET status = 'pending', retry_count = retry_count + 1,\n                assigned_node_id = NULL, updated_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "525252206a9926b596bea481acee2415213039eaeec67479d6aa295d122cd8f9"
+}

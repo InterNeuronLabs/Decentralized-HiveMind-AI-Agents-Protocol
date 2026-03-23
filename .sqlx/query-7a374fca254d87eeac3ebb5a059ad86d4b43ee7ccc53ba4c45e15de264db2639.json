@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO nodes (pubkey_hex, capabilities, tier, last_seen_at)\n        VALUES ($1, $2, $3, NOW())\n        ON CONFLICT (pubkey_hex) DO UPDATE\n          SET capabilities = EXCLUDED.capabilities,\n              tier         = EXCLUDED.tier,\n              last_seen_at = NOW()\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7a374fca254d87eeac3ebb5a059ad86d4b43ee7ccc53ba4c45e15de264db2639"
+}

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, tier, jobs_completed\n        FROM nodes\n        WHERE pubkey_hex = $1 AND is_banned = FALSE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "tier",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "jobs_completed",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c8c5f3a00560e4361fc3726c981d42d9a554bfe54e8960ea37491d0a921367ad"
+}

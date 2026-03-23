@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO reputation_events (node_id, event_type, delta, reason)\n        VALUES ($1, 'task_fail', -0.05, $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65c7acc036b0d336fdd4ddaeff1ce0df066886e587a2492a427ba43b033baeee"
+}

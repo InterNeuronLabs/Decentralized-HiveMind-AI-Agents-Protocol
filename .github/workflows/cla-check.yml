@@ -1,0 +1,30 @@
+name: CLA Check
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  cla:
+    name: Verify CLA signature
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check CONTRIBUTORS file
+        id: check
+        run: |
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          if grep -qi "@${AUTHOR}" CONTRIBUTORS 2>/dev/null; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail if CLA not signed
+        if: steps.check.outputs.signed == 'false'
+        run: |
+          echo "::error::CLA not signed. Please add your name and @${{ github.event.pull_request.user.login }} to CONTRIBUTORS and see CLA.md."
+          exit 1

@@ -1,0 +1,118 @@
+[workspace]
+members = [
+    "common",
+    "orchestrator",
+    "node-client",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Sooraj Nair"]
+license = "Apache-2.0"
+repository = "https://github.com/SoorajNair-001/os-project"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = { version = "0.7", features = ["macros"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["trace", "cors", "limit"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+
+# Redis
+redis = { version = "0.26", features = ["aio", "tokio-comp", "streams"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Cryptography
+ed25519-dalek = { version = "2", features = ["rand_core", "serde"] }
+ring = "0.17"
+rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }
+secrecy = { version = "0.8", features = ["serde"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Validation
+validator = { version = "0.20", features = ["derive"] }
+
+# Regex (prompt injection scanner)
+regex = "1"
+
+# Graph / DAG
+petgraph = { version = "0.6", features = ["serde-1"] }
+
+# Merkle tree (for Solana batch settlement)
+rs_merkle = "1"
+
+# Rate limiting
+governor = "0.6"
+
+# TLS
+rustls = "0.23"
+rcgen = "0.13"
+tokio-rustls = "0.26"
+
+# HTTP client (API relay, Solana RPC)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# CLI (node-client)
+clap = { version = "4", features = ["derive", "env"] }
+
+# ONNX Runtime (content safety classifier – prerelease, pin explicitly)
+ort = { version = "=2.0.0-rc.12", features = ["download-binaries"] }
+
+# Config
+config = "0.14"
+
+# Hex encoding
+hex = "0.4"
+
+# Lazy statics
+once_cell = "1"
+
+# Concurrent hashmap (rate limiter key store)
+dashmap = "5"
+
+# Nonzero literal helpers
+nonzero_ext = "0.3"
+
+# Env file loader
+dotenvy = "0.15"
+
+# SHA-2 hashing
+sha2 = "0.10"
+
+# Terminal UI aesthetics
+colored = "2"
+indicatif = "0.18"
+dialoguer = "0.11"
+
+[profile.dev]
+opt-level = 1   # faster debug builds
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

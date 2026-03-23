@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE nodes n\n        SET reputation_score = LEAST(1.0, GREATEST(0.0,\n            0.5                                  -- baseline\n            + COALESCE((\n                SELECT SUM(e.delta)\n                FROM reputation_events e\n                WHERE e.node_id = n.id\n                  AND e.occurred_at > NOW() - INTERVAL '30 days'\n              ), 0.0)\n        ))\n        WHERE n.is_banned = FALSE\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "70898cbcceb5672e3e111bb809c65e91d23814777ef9e0e4e77eea6e0834339b"
+}
